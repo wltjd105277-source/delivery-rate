@@ -12,7 +12,7 @@
   const COLS = ["발주일자","발주번호","상품명","모델명","발주수량","실제출고량","미출고수량","미출고 금액","미출고사유","비고","매입가","공급가"];
   const HEADER_SYNONYMS = {
     // 발주일자
-    "발주일자":"발주일자","발주일":"발주일자","주문일자":"발주일자","발주등록일시":"발주일자","발주 등록일시":"발주일자","입고예정일":"발주일자",
+    "발주일자":"발주일자","발주일":"발주일자","주문일자":"발주일자","발주등록일시":"발주일자","발주 등록일시":"발주일자","입고예정일":"발주일자","발주등록 일시":"발주일자","발주등록날짜":"발주일자","등록일시":"발주일자","등록일":"발주일자","발주일시":"발주일자","주문일":"발주일자",
     // 발주번호
     "발주번호":"발주번호","발주ID":"발주번호","주문번호":"발주번호","발주 번호":"발주번호","PO번호":"발주번호",
     // 상품명
@@ -370,8 +370,13 @@
       kpiNow = idx>=0 ? allMonthly[idx] : kpiNow;
       kpiPrev = idx>0 ? allMonthly[idx-1] : kpiPrev;
     }else{
-      // 전체 기간 합계
-      kpiNow = allMonthly.reduce((a,b)=>({period:"전체",count:a.count+b.count,qty:a.qty+b.qty,amt:a.amt+b.amt}),{count:0,qty:0,amt:0});
+      // 전체 기간 합계 — 발주일자 유무와 무관하게 모든 행 합산
+      kpiNow = State.rows.reduce((a,r)=>({
+        period:"전체",
+        count: a.count + 1,
+        qty:   a.qty + (r.미출고수량||0),
+        amt:   a.amt + (r["미출고 금액"]||0)
+      }), {count:0,qty:0,amt:0});
     }
     const dly = aggDaily(rows);
     const reasonsAgg = aggReasons(rows);
@@ -837,6 +842,10 @@
 
   /* ===== 데이터 관리 ===== */
   function renderManage(){
+    const noDate = State.rows.filter(r=>!r.발주일자).length;
+    const noReason = State.rows.filter(r=>!r.미출고사유).length;
+    const noAmt = State.rows.filter(r=>!r["미출고 금액"]).length;
+    const sample = State.rows.find(r=>!r.발주일자);
     return `
       <div class="grid cols-2" style="margin-bottom:14px">
         <div class="panel">
@@ -878,6 +887,21 @@
           </table>
         </div>
       </div>
+
+      ${noDate||noAmt ? `
+      <div class="panel" style="margin-bottom:14px;border-color:rgba(248,81,73,.5)">
+        <h3 style="color:#ff8e87">⚠ 매핑 진단</h3>
+        <table class="t">
+          <tr><td>발주일자가 매핑 안 된 행</td><td class="num"><b style="color:#ff8e87">${fmtN(noDate)}</b> / ${fmtN(State.rows.length)} 건</td></tr>
+          <tr><td>미출고사유가 비어있는 행</td><td class="num">${fmtN(noReason)} 건</td></tr>
+          <tr><td>미출고 금액이 0인 행</td><td class="num">${fmtN(noAmt)} 건</td></tr>
+        </table>
+        ${sample ? `
+          <div class="hr"></div>
+          <div class="muted sm">매핑 실패 첫 행 샘플 (어떤 양식인지 확인용):</div>
+          <pre style="background:#0e1117;padding:10px;border-radius:8px;font-size:11px;overflow:auto;color:#9aa4b2;margin-top:6px;max-height:200px">${escapeHtml(JSON.stringify(sample,null,2))}</pre>
+        ` : ""}
+      </div>` : ""}
 
       <div class="panel">
         <h3>월별 데이터 요약</h3>
