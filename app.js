@@ -92,8 +92,14 @@
   /* ---------- 엑셀 파싱 ---------- */
   function normalizeHeader(h){
     if(h==null) return "";
-    const k = String(h).trim();
-    return HEADER_SYNONYMS[k] || k;
+    // 보이지 않는 문자 정리 (NBSP, ZWS, ZWNJ, ZWJ, BOM)
+    let k = String(h).replace(/[ ​‌‍﻿]/g, "")
+                     .replace(/\s+/g, " ").trim();
+    if(HEADER_SYNONYMS[k]) return HEADER_SYNONYMS[k];
+    // 공백 모두 제거 후 재시도
+    const k2 = k.replace(/\s/g, "");
+    if(HEADER_SYNONYMS[k2]) return HEADER_SYNONYMS[k2];
+    return k;
   }
 
   function parseDate(v){
@@ -145,7 +151,24 @@
 
     for(let r=headerIdx+1;r<aoa.length;r++){
       const row = aoa[r]; if(!row) continue;
-      const d = parseDate(idx["발주일자"]>=0 ? row[idx["발주일자"]] : null);
+      let d = parseDate(idx["발주일자"]>=0 ? row[idx["발주일자"]] : null);
+      // Fallback: 발주일자 매핑 실패 시, row 내에서 datetime 형식 자동 탐색
+      // (입고예정일/유통기한/제조일자 같은 다른 날짜는 피하고 datetime이 가장 풍부한 셀 우선)
+      if(!d){
+        let bestCandidate = null;
+        let bestScore = 0;
+        for(let c=0;c<row.length;c++){
+          const v = row[c]; if(v==null||v==="") continue;
+          // datetime 패턴 (날짜+시간) 우선
+          const isDateTime = typeof v === "string" && /\d{4}[-./]\d{1,2}[-./]\d{1,2}[ T]\d{1,2}:\d{2}/.test(v);
+          const cd = parseDate(v);
+          if(cd && cd.getFullYear()>=2020 && cd.getFullYear()<=2035){
+            const score = isDateTime ? 10 : (typeof v === "string" ? 5 : 1);
+            if(score > bestScore){ bestScore = score; bestCandidate = cd; }
+          }
+        }
+        if(bestCandidate) d = bestCandidate;
+      }
       const po = idx["발주번호"]>=0 ? row[idx["발주번호"]] : null;
       const name = idx["상품명"]>=0 ? row[idx["상품명"]] : null;
       // 데이터 없는 행은 skip
