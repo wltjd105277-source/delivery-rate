@@ -106,6 +106,11 @@
     if(v==null||v==="") return null;
     if(v instanceof Date && !isNaN(v)) return v;
     if(typeof v === "number"){
+      // YYYYMMDD 정수 형식 (예: 20260506)
+      if(Number.isInteger(v) && v >= 19000101 && v <= 21001231){
+        const s = String(v); const yy=+s.slice(0,4), mm=+s.slice(4,6), dd=+s.slice(6,8);
+        if(mm>=1 && mm<=12 && dd>=1 && dd<=31) return new Date(yy, mm-1, dd);
+      }
       // Excel serial date
       const d = XLSX.SSF.parse_date_code(v);
       if(d) return new Date(d.y, d.m-1, d.d, d.H||0, d.M||0, d.S||0);
@@ -113,8 +118,12 @@
     if(typeof v === "string"){
       const s = v.trim();
       // YYYY-MM-DD or YYYY/MM/DD or YYYY.MM.DD
-      const m = s.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
+      let m = s.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
       if(m) return new Date(+m[1], +m[2]-1, +m[3]);
+      // YYYYMMDD 문자열 (예: "20260506")
+      m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+      if(m){ const yy=+m[1], mm=+m[2], dd=+m[3];
+        if(mm>=1&&mm<=12&&dd>=1&&dd<=31) return new Date(yy, mm-1, dd); }
       const d = new Date(s); return isNaN(d) ? null : d;
     }
     return null;
@@ -145,6 +154,15 @@
     const headers = aoa[headerIdx].map(normalizeHeader);
     const idx = {};
     COLS.forEach(c=>{ idx[c] = headers.indexOf(c); });
+
+    // 발주일자 컬럼 우선순위: 입고예정일 > 발주등록일시 > 기타
+    // (PO 파일에서 입고예정일이 사용자가 기준으로 삼는 "발주 날짜"이므로)
+    const rawHeaderTexts = aoa[headerIdx].map(h => String(h||"").replace(/\s/g,"").trim());
+    const datePriority = ["입고예정일","발주등록일시","발주일자","발주일","주문일자","발주등록날짜","등록일시","등록일","발주일시","주문일"];
+    for(const cand of datePriority){
+      const i = rawHeaderTexts.findIndex(h => h === cand);
+      if(i >= 0){ idx["발주일자"] = i; break; }
+    }
 
     // 디버그: 첫 행의 원본 셀 정보를 capture (window 전역으로)
     try{
