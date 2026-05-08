@@ -11,8 +11,8 @@
   const STORE_KEY = "coupang-fulfillment-v1";
   const COLS = ["발주일자","발주번호","상품명","모델명","발주수량","실제출고량","미출고수량","미출고 금액","미출고사유","비고","매입가","공급가"];
   const HEADER_SYNONYMS = {
-    // 발주일자
-    "발주일자":"발주일자","발주일":"발주일자","주문일자":"발주일자","발주등록일시":"발주일자","발주 등록일시":"발주일자","입고예정일":"발주일자","발주등록 일시":"발주일자","발주등록날짜":"발주일자","등록일시":"발주일자","등록일":"발주일자","발주일시":"발주일자","주문일":"발주일자",
+    // 발주일자 (관리용 양식 전용 — PO 양식의 발주등록일시/입고예정일 등은 매핑 안 함, 파일 수정시간 사용)
+    "발주일자":"발주일자","발주일":"발주일자","주문일자":"발주일자",
     // 발주번호
     "발주번호":"발주번호","발주ID":"발주번호","주문번호":"발주번호","발주 번호":"발주번호","PO번호":"발주번호",
     // 상품명
@@ -144,62 +144,24 @@
   function rowsFromSheet(ws, sheetName, fileName){
     const aoa = XLSX.utils.sheet_to_json(ws, { header:1, defval:null, raw:true });
     if(!aoa.length) return [];
-    // 헤더 행 찾기 (첫 5행 안에서 "발주일자"/"발주번호" 매칭)
+    // 헤더 행 찾기 (첫 5행 안에서 "발주번호" 또는 "발주일자")
     let headerIdx = -1;
     for(let i=0;i<Math.min(5,aoa.length);i++){
       const norm = aoa[i].map(normalizeHeader);
-      if(norm.includes("발주일자") || norm.includes("발주번호")){ headerIdx=i; break; }
+      if(norm.includes("발주번호") || norm.includes("발주일자")){ headerIdx=i; break; }
     }
     if(headerIdx<0) return [];
     const headers = aoa[headerIdx].map(normalizeHeader);
     const idx = {};
     COLS.forEach(c=>{ idx[c] = headers.indexOf(c); });
 
-    // 발주일자 컬럼 우선순위: 입고예정일 > 발주등록일시 > 기타
-    // (PO 파일에서 입고예정일이 사용자가 기준으로 삼는 "발주 날짜"이므로)
-    const rawHeaderTexts = aoa[headerIdx].map(h => String(h||"").replace(/\s/g,"").trim());
-    const datePriority = ["입고예정일","발주등록일시","발주일자","발주일","주문일자","발주등록날짜","등록일시","등록일","발주일시","주문일"];
-    for(const cand of datePriority){
-      const i = rawHeaderTexts.findIndex(h => h === cand);
-      if(i >= 0){ idx["발주일자"] = i; break; }
-    }
-
-    // 디버그: 첫 행의 원본 셀 정보를 capture (window 전역으로)
-    try{
-      if(!window.__debug) window.__debug = [];
-      const sample = aoa[headerIdx+1] || [];
-      window.__debug.push({
-        file: fileName + " / " + sheetName,
-        rawHeaders: aoa[headerIdx].map(h=>({val:h, type:typeof h, codes: typeof h==="string"?[...h].slice(0,30).map(c=>c.charCodeAt(0)):null})),
-        normHeaders: headers,
-        idxMap: idx,
-        firstDataRow: sample.map(v=>({val:v, type:typeof v, isDate: v instanceof Date}))
-      });
-    }catch(e){ /* ignore */ }
-
     const out = [];
     const has = (k,row) => idx[k]>=0 && row[idx[k]]!=null && row[idx[k]]!=="";
 
     for(let r=headerIdx+1;r<aoa.length;r++){
       const row = aoa[r]; if(!row) continue;
-      let d = parseDate(idx["발주일자"]>=0 ? row[idx["발주일자"]] : null);
-      // Fallback: 발주일자 매핑 실패 시, row 내에서 datetime 형식 자동 탐색
-      // (입고예정일/유통기한/제조일자 같은 다른 날짜는 피하고 datetime이 가장 풍부한 셀 우선)
-      if(!d){
-        let bestCandidate = null;
-        let bestScore = 0;
-        for(let c=0;c<row.length;c++){
-          const v = row[c]; if(v==null||v==="") continue;
-          // datetime 패턴 (날짜+시간) 우선
-          const isDateTime = typeof v === "string" && /\d{4}[-./]\d{1,2}[-./]\d{1,2}[ T]\d{1,2}:\d{2}/.test(v);
-          const cd = parseDate(v);
-          if(cd && cd.getFullYear()>=2020 && cd.getFullYear()<=2035){
-            const score = isDateTime ? 10 : (typeof v === "string" ? 5 : 1);
-            if(score > bestScore){ bestScore = score; bestCandidate = cd; }
-          }
-        }
-        if(bestCandidate) d = bestCandidate;
-      }
+      // 발주일자: 명시 컬럼이 있으면 그 값만 사용. 없거나 파싱 실패면 null로 두고 ingestFiles에서 파일 수정 시간으로 fallback
+      const d = parseDate(idx["발주일자"]>=0 ? row[idx["발주일자"]] : null);
       const po = idx["발주번호"]>=0 ? row[idx["발주번호"]] : null;
       const name = idx["상품명"]>=0 ? row[idx["상품명"]] : null;
       // 데이터 없는 행은 skip
