@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>쿠팡 납품률 · 미출고 관리</title>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" />
+<link rel="preconnect" href="https://cdn.jsdelivr.net" />
+<style>
+  :root{
+    --bg:#0e1117; --panel:#161b22; --panel-2:#1f2530; --line:#2a313c;
+    --text:#e6edf3; --muted:#9aa4b2; --brand:#ff5a1f; --brand-2:#ffb38a;
+    --good:#3fb950; --warn:#d29922; --bad:#f85149; --info:#58a6ff;
+    --radius:14px;
+    --shadow:0 6px 24px rgba(0,0,0,.25);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Apple SD Gothic Neo","Segoe UI",sans-serif;
+    font-size:14px;line-height:1.45;}
+  a{color:var(--info);text-decoration:none}
+  button{font-family:inherit}
+  /* ===== Layout ===== */
+  .app{display:grid;grid-template-rows:auto auto 1fr;min-height:100vh}
+  header.top{
+    display:flex;align-items:center;gap:14px;padding:14px 22px;
+    border-bottom:1px solid var(--line);background:linear-gradient(180deg,#11161e,#0e1117);
+    position:sticky;top:0;z-index:20;
+  }
+  .logo{
+    width:34px;height:34px;border-radius:8px;
+    background:linear-gradient(135deg,var(--brand),#ff8c5a);
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;
+    box-shadow:0 4px 12px rgba(255,90,31,.35);
+  }
+  .brand{display:flex;flex-direction:column;line-height:1.1}
+  .brand b{font-size:15px;letter-spacing:.2px}
+  .brand small{color:var(--muted);font-size:11px}
+  .top .spacer{flex:1}
+  .data-status{
+    display:flex;align-items:center;gap:8px;padding:6px 12px;
+    background:var(--panel);border:1px solid var(--line);border-radius:999px;
+    color:var(--muted);font-size:12px;
+  }
+  .data-status.ok{color:var(--good);border-color:rgba(63,185,80,.4)}
+  .btn{
+    appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--text);
+    padding:8px 14px;border-radius:10px;font-weight:600;cursor:pointer;font-size:13px;
+    transition:.15s;
+  }
+  .btn:hover{background:var(--panel-2);border-color:#3a4350}
+  .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+  .btn.primary:hover{background:#ff6d35}
+  .btn.ghost{background:transparent}
+  .btn.danger{color:#fff;background:var(--bad);border-color:var(--bad)}
+  .btn.danger:hover{background:#e23b30}
+
+  nav.tabs{
+    display:flex;gap:6px;padding:0 22px;border-bottom:1px solid var(--line);
+    background:#10151c;align-items:center;
+  }
+  nav.tabs .tab{
+    padding:12px 16px;color:var(--muted);font-weight:600;cursor:pointer;
+    border-bottom:2px solid transparent;font-size:13.5px;
+  }
+  nav.tabs .tab.active{color:var(--text);border-bottom-color:var(--brand)}
+  nav.tabs .tab:hover{color:var(--text)}
+  nav.tabs .right{margin-left:auto;display:flex;align-items:center;gap:10px;padding:8px 0}
+  select,input[type=text],input[type=date]{
+    background:var(--panel);border:1px solid var(--line);color:var(--text);
+    padding:7px 10px;border-radius:8px;font-size:13px;font-family:inherit;
+  }
+  select:focus,input:focus{outline:1px solid var(--brand);border-color:var(--brand)}
+
+  main{padding:22px;max-width:1480px;width:100%;margin:0 auto}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+  .panel h3{margin:0 0 12px 0;font-size:14px;color:var(--muted);font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+  .grid{display:grid;gap:14px}
+  .grid.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .grid.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .grid.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  @media (max-width:1100px){.grid.cols-4{grid-template-columns:repeat(2,1fr)}.grid.cols-3{grid-template-columns:1fr 1fr}.grid.cols-2{grid-template-columns:1fr}}
+  @media (max-width:640px){.grid.cols-4,.grid.cols-3,.grid.cols-2{grid-template-columns:1fr}}
+
+  /* KPI cards */
+  .kpi{display:flex;flex-direction:column;gap:6px}
+  .kpi .lbl{color:var(--muted);font-size:12px;letter-spacing:.3px}
+  .kpi .val{font-size:26px;font-weight:800;letter-spacing:-.2px}
+  .kpi .delta{font-size:12px;font-weight:600}
+  .delta.up{color:var(--bad)}
+  .delta.down{color:var(--good)}
+  .delta.flat{color:var(--muted)}
+
+  /* Tables */
+  table.t{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.t th,table.t td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line)}
+  table.t th{font-size:11.5px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px;cursor:pointer;user-select:none;white-space:nowrap}
+  table.t th.sort-asc::after{content:" ▲";color:var(--brand)}
+  table.t th.sort-desc::after{content:" ▼";color:var(--brand)}
+  table.t tr:hover td{background:rgba(255,255,255,.02)}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid transparent}
+  .pill.s1{background:rgba(248,81,73,.12);color:#ff8e87;border-color:rgba(248,81,73,.3)}
+  .pill.s2{background:rgba(210,153,34,.15);color:#f1c84e;border-color:rgba(210,153,34,.3)}
+  .pill.s3{background:rgba(88,166,255,.12);color:#88c0ff;border-color:rgba(88,166,255,.3)}
+  .pill.s4{background:rgba(63,185,80,.12);color:#7ce394;border-color:rgba(63,185,80,.3)}
+  .pill.s5{background:rgba(186,131,242,.14);color:#c9a4ff;border-color:rgba(186,131,242,.3)}
+  .pill.s6{background:rgba(255,90,31,.14);color:#ffaa84;border-color:rgba(255,90,31,.3)}
+
+  /* Upload zone */
+  .drop{
+    border:2px dashed #3a4350;border-radius:14px;padding:34px;text-align:center;
+    background:linear-gradient(180deg,rgba(255,90,31,.04),transparent);
+    color:var(--muted);transition:.15s;
+  }
+  .drop.hover{border-color:var(--brand);background:rgba(255,90,31,.08);color:var(--text)}
+  .drop b{color:var(--text)}
+
+  /* Charts */
+  .chart-box{position:relative;height:300px}
+  .chart-box.tall{height:360px}
+
+  /* Empty state */
+  .empty{padding:60px 24px;text-align:center;color:var(--muted)}
+  .empty h2{color:var(--text);margin:0 0 8px 0;font-size:20px}
+
+  /* Pagination */
+  .pager{display:flex;justify-content:flex-end;gap:6px;margin-top:10px}
+  .pager button{padding:5px 10px;font-size:12px;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:6px;cursor:pointer}
+  .pager button:disabled{opacity:.4;cursor:not-allowed}
+  .pager .info{align-self:center;color:var(--muted);font-size:12px;margin-right:auto}
+
+  /* Toast */
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--panel);border:1px solid var(--line);
+    padding:12px 16px;border-radius:10px;box-shadow:var(--shadow);z-index:100;font-size:13px;
+    transform:translateY(20px);opacity:0;transition:.2s}
+  .toast.show{transform:translateY(0);opacity:1}
+  .toast.ok{border-color:rgba(63,185,80,.5)}
+  .toast.err{border-color:rgba(248,81,73,.5)}
+
+  /* Misc */
+  .hr{height:1px;background:var(--line);margin:14px 0}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .muted{color:var(--muted)}
+  .sm{font-size:12px}
+  .truncate{max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom}
+  .matrix th,.matrix td{text-align:right}
+  .matrix th:first-child,.matrix td:first-child{text-align:left}
+  .heat{background-color:rgba(255,90,31,calc(var(--w,0) * .9 + .05))}
+  .totalrow td{font-weight:700;background:rgba(255,90,31,.08)}
+
+  /* Print */
+  @media print{
+    header.top,nav.tabs,.no-print{display:none!important}
+    body{background:#fff;color:#000}
+    .panel{background:#fff;color:#000;border-color:#ccc;box-shadow:none}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="logo">L</div>
+    <div class="brand"><b>쿠팡 납품률 · 미출고 관리</b><small>라인업시스템(주) · LANstar</small></div>
+    <div class="spacer"></div>
+    <div id="dataStatus" class="data-status">데이터 없음 · 엑셀을 업로드하세요</div>
+    <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" style="display:none" multiple />
+    <button class="btn primary" onclick="document.getElementById('fileInput').click()">＋ 엑셀 업로드</button>
+    <button class="btn ghost" id="btnPrint" title="인쇄/PDF" onclick="window.print()">⎙</button>
+  </header>
+
+  <nav class="tabs">
+    <div class="tab active" data-tab="dashboard">대시보드</div>
+    <div class="tab" data-tab="reasons">사유별 분석</div>
+    <div class="tab" data-tab="products">상품(모델)별</div>
+    <div class="tab" data-tab="detail">상세 검색</div>
+    <div class="tab" data-tab="manage">데이터 관리</div>
+    <div class="right">
+      <span class="muted sm">기간</span>
+      <select id="periodSelect"></select>
+    </div>
+  </nav>
+
+  <main id="main"></main>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# Render Static Site 배포 설정
+# 1) GitHub에 이 폴더 업로드 → render.com → "New +" → Static Site → 리포 선택
+# 2) Publish Directory: . (현재 폴더)
+# 3) Build Command: 없음 (정적 파일)
+services:
+  - type: web
+    name: coupang-fulfillment
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: .
+    pullRequestPreviewsEnabled: true
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
