@@ -146,6 +146,19 @@
     const idx = {};
     COLS.forEach(c=>{ idx[c] = headers.indexOf(c); });
 
+    // 디버그: 첫 행의 원본 셀 정보를 capture (window 전역으로)
+    try{
+      if(!window.__debug) window.__debug = [];
+      const sample = aoa[headerIdx+1] || [];
+      window.__debug.push({
+        file: fileName + " / " + sheetName,
+        rawHeaders: aoa[headerIdx].map(h=>({val:h, type:typeof h, codes: typeof h==="string"?[...h].slice(0,30).map(c=>c.charCodeAt(0)):null})),
+        normHeaders: headers,
+        idxMap: idx,
+        firstDataRow: sample.map(v=>({val:v, type:typeof v, isDate: v instanceof Date}))
+      });
+    }catch(e){ /* ignore */ }
+
     const out = [];
     const has = (k,row) => idx[k]>=0 && row[idx[k]]!=null && row[idx[k]]!=="";
 
@@ -218,13 +231,22 @@
     for(const f of fileList){
       try{
         const wb = await readWorkbook(f);
+        // 파일 자체의 수정/생성 시각 — 행 단위 매핑 실패 시 최종 fallback
+        const fileMtime = new Date(f.lastModified || Date.now());
         let added=0;
         for(const sn of wb.SheetNames){
           const got = rowsFromSheet(wb.Sheets[sn], sn, f.name);
+          // 발주일자가 없는 행은 파일의 수정 날짜로 자동 채움
+          for(const r of got){
+            if(!r.발주일자){
+              r.발주일자 = fileMtime.toISOString();
+              r._dateFromFile = true;  // "파일 날짜로 보정됨" 표시
+            }
+          }
           newRows.push(...got);
           added += got.length;
         }
-        fileMeta.push({ name:f.name, size:f.size, addedAt:new Date().toISOString(), rowCount:added });
+        fileMeta.push({ name:f.name, size:f.size, addedAt:new Date().toISOString(), rowCount:added, mtime:fileMtime.toISOString() });
       }catch(e){
         console.error(e);
         toast(`파일 읽기 실패: ${f.name}`, "err");
@@ -866,6 +888,7 @@
   /* ===== 데이터 관리 ===== */
   function renderManage(){
     const noDate = State.rows.filter(r=>!r.발주일자).length;
+    const fromFile = State.rows.filter(r=>r._dateFromFile).length;
     const noReason = State.rows.filter(r=>!r.미출고사유).length;
     const noAmt = State.rows.filter(r=>!r["미출고 금액"]).length;
     const sample = State.rows.find(r=>!r.발주일자);
@@ -911,11 +934,12 @@
         </div>
       </div>
 
-      ${noDate||noAmt ? `
-      <div class="panel" style="margin-bottom:14px;border-color:rgba(248,81,73,.5)">
-        <h3 style="color:#ff8e87">⚠ 매핑 진단</h3>
+      ${noDate||noAmt||fromFile ? `
+      <div class="panel" style="margin-bottom:14px;border-color:${noDate?'rgba(248,81,73,.5)':'rgba(210,153,34,.5)'}">
+        <h3 style="color:${noDate?'#ff8e87':'#f1c84e'}">${noDate?'⚠ 매핑 진단':'ℹ 매핑 보정'}</h3>
         <table class="t">
-          <tr><td>발주일자가 매핑 안 된 행</td><td class="num"><b style="color:#ff8e87">${fmtN(noDate)}</b> / ${fmtN(State.rows.length)} 건</td></tr>
+          <tr><td>발주일자가 매핑 안 된 행</td><td class="num"><b style="color:${noDate?'#ff8e87':'inherit'}">${fmtN(noDate)}</b> / ${fmtN(State.rows.length)} 건</td></tr>
+          <tr><td>파일 날짜로 자동 보정된 행</td><td class="num"><b style="color:#f1c84e">${fmtN(fromFile)}</b> 건</td></tr>
           <tr><td>미출고사유가 비어있는 행</td><td class="num">${fmtN(noReason)} 건</td></tr>
           <tr><td>미출고 금액이 0인 행</td><td class="num">${fmtN(noAmt)} 건</td></tr>
         </table>
@@ -937,7 +961,6 @@
                 <td class="num">${fmtN(m.count)}</td>
                 <td class="num">${fmtN(m.qty)}</td>
                 <td class="num">${fmtW(m.amt)}</td>
-              </tr>
             `).join("") || `<tr><td colspan="4" class="muted">데이터 없음</td></tr>`}
           </tbody>
         </table>
