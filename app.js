@@ -97,21 +97,47 @@
     charts: {},          // Chart.js 인스턴스
   };
 
+  // 저장/불러오기: 백엔드 API 우선, 실패 시 localStorage fallback (오프라인/정적 호스팅 호환)
+  let _saveTimer = null;
   function save(){
+    // 디바운스: 짧은 시간 내 여러 번 저장 호출 시 한 번만 실제 저장
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(_saveNow, 500);
+  }
+  async function _saveNow(){
+    const payload = {rows:State.rows, files:State.files};
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(payload)); }catch(e){}
     try{
-      localStorage.setItem(STORE_KEY, JSON.stringify({rows:State.rows,files:State.files}));
+      const r = await fetch("/api/data", {
+        method:"PUT", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(payload)
+      });
+      if(!r.ok) throw new Error("API "+r.status);
     }catch(e){
-      console.error(e);
-      toast("저장 용량을 초과했습니다. 일부 파일을 삭제해 주세요.","err");
+      console.warn("서버 저장 실패 (localStorage만 저장됨):", e);
     }
   }
-  function load(){
+  async function load(){
+    // 1순위: 서버 (PC 간 공유)
     try{
-      const s = localStorage.getItem(STORE_KEY); if(!s) return;
+      const r = await fetch("/api/data", {cache:"no-store"});
+      if(r.ok){
+        const p = await r.json();
+        if(p && p.rows){
+          State.rows = (p.rows||[]).map(x=>({...x, 발주일자: x.발주일자 ? new Date(x.발주일자) : null}));
+          State.files = p.files||[];
+          return true;
+        }
+      }
+    }catch(e){ /* 백엔드 없으면 localStorage로 */ }
+    // 2순위: localStorage (오프라인/정적 호스팅)
+    try{
+      const s = localStorage.getItem(STORE_KEY); if(!s) return false;
       const p = JSON.parse(s);
       State.rows = (p.rows||[]).map(r=>({...r, 발주일자: r.발주일자 ? new Date(r.발주일자) : null}));
       State.files = p.files||[];
-    }catch(e){ console.error(e); }
+      return true;
+    }catch(e){ console.error(e); return false; }
   }
 
   /* ---------- 엑셀 파싱 ---------- */
@@ -1035,12 +1061,23 @@
   }
 
   /* ---------- 초기화 ---------- */
-  load();
   bind();
+  // SKU 매핑 + 서버 데이터 동시 로드, 둘 다 끝나면 한 번에 render
+  Promise.all([
+    fetch("sku_lookup.json", {cache:"no-cache"}).then(r => r.ok ? r.json() : null).catch(() => null),
+    load()
+  ]).then(([sku]) => {
+    if(sku) Object.assign(SKU_LOOKUP, sku);
+    render();
+  });
+  // 초기화 진행 동안 빈 화면 방지 — localStorage 기준으로 먼저 한 번 그림
+  try{
+    const s = localStorage.getItem(STORE_KEY);
+    if(s){
+      const p = JSON.parse(s);
+      State.rows = (p.rows||[]).map(r=>({...r, 발주일자: r.발주일자 ? new Date(r.발주일자) : null}));
+      State.files = p.files||[];
+    }
+  }catch(e){}
   render();
-  // SKU 매핑 테이블 로드 (랜스타 847개 SKU → 모델명)
-  fetch("sku_lookup.json", {cache:"no-cache"})
-    .then(r => r.ok ? r.json() : null)
-    .then(d => { if(d){ Object.assign(SKU_LOOKUP, d); render(); } })
-    .catch(() => {});
 })();

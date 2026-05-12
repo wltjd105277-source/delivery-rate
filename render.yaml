@@ -1,22 +1,26 @@
-# Render Static Site 배포 설정
-# 1) GitHub에 이 폴더 업로드 → render.com → "New +" → Static Site → 리포 선택
-# 2) Publish Directory: . (현재 폴더)
-# 3) Build Command: 없음 (정적 파일)
+# Render Web Service 배포 설정 (FastAPI + 영구 디스크)
+# - 정적 파일 + /api/data API 서빙
+# - data.json은 디스크에 영구 저장 → PC 간 공유 가능
+# - 무료 플랜: 15분 idle 시 sleep, 첫 접속 30초 콜드 스타트
 services:
   - type: web
-    name: coupang-fulfillment
-    runtime: static
-    buildCommand: ""
-    staticPublishPath: .
-    pullRequestPreviewsEnabled: true
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: public, max-age=0, must-revalidate
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
+    name: delivery-rate
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: python server.py
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: DATA_DIR
+        value: /data
+      - key: ACCESS_TOKEN
+        sync: false   # Render 대시보드에서 직접 설정 (선택, 비워두면 인증 없음)
+      - key: PYTHON_VERSION
+        value: "3.11"
+    disk:
+      name: data-disk
+      mountPath: /data
+      sizeGB: 1
