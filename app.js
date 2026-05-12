@@ -150,11 +150,18 @@
     return "";
   }
 
+  // SKU ID → 모델명 lookup (sku_lookup.json에서 로드, 847개 랜스타 제품)
+  const SKU_LOOKUP = {};
+
   // 행의 최종 표시 모델명 (기존 데이터에 SKU가 저장돼 있어도 자동 변환)
   function rowModel(r){
     let model = (r.모델명||"").trim();
-    // 숫자만 6자리 이상이면 쿠팡 SKU ID → 모델 아님 → 상품명에서 추출 시도
-    if(!model || /^\d{6,}$/.test(model)) model = extractModel(r.상품명) || "";
+    // 숫자만 6자리 이상이면 쿠팡 SKU ID → lookup 우선, 없으면 상품명 추출
+    if(!model || /^\d{6,}$/.test(model)){
+      const sku = model && /^\d{6,}$/.test(model) ? model : null;
+      if(sku && SKU_LOOKUP[sku]) return SKU_LOOKUP[sku];
+      model = extractModel(r.상품명) || (sku || "");
+    }
     return model;
   }
 
@@ -994,7 +1001,6 @@
       const fs = [...e.target.files]; if(fs.length) ingestFiles(fs);
       e.target.value = "";
     });
-    window.addEventListener("dragover", e=>{e.preventDefault()});
     window.addEventListener("drop", e=>{
       if(!e.dataTransfer?.files?.length) return;
       e.preventDefault();
@@ -1006,4 +1012,9 @@
   load();
   bind();
   render();
+  // SKU 매핑 테이블 로드 (랜스타 847개 SKU → 모델명)
+  fetch("sku_lookup.json", {cache:"no-cache"})
+    .then(r => r.ok ? r.json() : null)
+    .then(d => { if(d){ Object.assign(SKU_LOOKUP, d); render(); } })
+    .catch(() => {});
 })();
