@@ -57,6 +57,31 @@
     if(!reasonClassMap.has(r)) reasonClassMap.set(r,"s"+(reasonClassMap.size%6+1));
     return reasonClassMap.get(r);
   }
+
+  // 긴 사유 라벨을 짧게 축약 (PO 양식의 긴 사유 → 핵심 키워드만)
+  function shortenReason(reason){
+    if(!reason) return "미분류";
+    const r = String(reason);
+    if(/단종|생산중단|취급중단/.test(r)){
+      if(/쿠팡/.test(r)) return "단종(쿠팡)";
+      if(/채널/.test(r)) return "단종(채널)";
+      return "단종";
+    }
+    if(/수입|선적|통관/.test(r)) return "수입지연";
+    if(/재고\s*부족/.test(r)) return "재고부족";
+    if(/품절/.test(r)) return "품절";
+    if(/단가|가격|Price|매입가/.test(r)) return "단가이슈";
+    if(/수량.*제한|박스/.test(r)) return "수량제한";
+    if(/재고\s*불일치/.test(r)) return "재고불일치";
+    if(/미분류/.test(r)) return "미분류";
+    return r.length > 12 ? r.slice(0, 11) + "…" : r;
+  }
+
+  // 사유 pill HTML 생성 (짧은 라벨 + 원문 tooltip)
+  function reasonPill(reason){
+    const r = reason || "미분류";
+    return `<span class="pill ${reasonClass(r)}" title="${escapeHtml(r)}">${escapeHtml(shortenReason(r))}</span>`;
+  }
   function reasonColor(r, list){
     const idx = list.indexOf(r);
     return REASON_PALETTE[idx % REASON_PALETTE.length];
@@ -494,7 +519,7 @@
             <tbody>
               ${reasonsAgg.map(r=>`
                 <tr>
-                  <td><span class="pill ${reasonClass(r.reason)}">${escapeHtml(r.reason)}</span></td>
+                  <td>${reasonPill(r.reason)}</td>
                   <td class="num">${fmtN(r.count)}</td>
                   <td class="num">${fmtN(r.qty)}</td>
                   <td class="num">${fmtW(r.amt)}</td>
@@ -615,7 +640,7 @@
               ${m.reasons.map(r=>{
                 const total = m.months.reduce((a,mo)=>a+m.matrix[r][mo].amt,0);
                 return `<tr>
-                  <td><span class="pill ${reasonClass(r)}">${escapeHtml(r)}</span></td>
+                  <td>${reasonPill(r)}</td>
                   ${m.months.map(mo=>{
                     const v = m.matrix[r][mo].amt;
                     const w = v/Math.max(...m.months.map(mm=>m.matrix[r][mm].amt),1);
@@ -650,7 +675,7 @@
       <div class="grid cols-2">
         ${cur.slice(0,4).map(r=>`
           <div class="panel">
-            <h3>『${escapeHtml(r.reason)}』 TOP 10 상품 — ${State.period==="all"?"전체":State.period}</h3>
+            <h3 title="${escapeHtml(r.reason)}">『${escapeHtml(shortenReason(r.reason))}』 TOP 10 상품 — ${State.period==="all"?"전체":State.period}</h3>
             <table class="t"><thead><tr><th>상품/모델</th><th class="num">건수</th><th class="num">수량</th><th class="num">금액</th></tr></thead>
             <tbody>
               ${aggProducts(rows.filter(x=>(x.미출고사유||"미분류")===r.reason),10).map(p=>`
@@ -727,7 +752,7 @@
                 <td class="num">${fmtN(p.count)}</td>
                 <td class="num">${fmtN(p.qty)}</td>
                 <td class="num">${fmtW(p.amt)}</td>
-                <td>${top.map(([r,c])=>`<span class="pill ${reasonClass(r)}" style="margin-right:4px">${escapeHtml(r)} ${c}</span>`).join("")}</td>
+                <td>${top.map(([r,c])=>`<span class="pill ${reasonClass(r)}" title="${escapeHtml(r)}" style="margin-right:4px">${escapeHtml(shortenReason(r))} ${c}</span>`).join("")}</td>
               </tr>`;
             }).join("") || `<tr><td colspan="6" class="muted">데이터 없음</td></tr>`}
           </tbody>
@@ -823,7 +848,7 @@
           <td class="num">${fmtN(r.실제출고량)}</td>
           <td class="num"><b>${fmtN(r.미출고수량)}</b></td>
           <td class="num">${fmtW(r["미출고 금액"])}</td>
-          <td><span class="pill ${reasonClass(r.미출고사유||"미분류")}">${escapeHtml(r.미출고사유||"미분류")}</span></td>
+          <td>${reasonPill(r.미출고사유)}</td>
           <td><span class="muted truncate" style="max-width:200px" title="${escapeHtml(r.비고||"")}">${escapeHtml(r.비고||"")}</span></td>
         </tr>
       `).join("") || `<tr><td colspan="10" class="muted" style="padding:30px;text-align:center">조건에 맞는 데이터 없음</td></tr>`;
@@ -1001,6 +1026,7 @@
       const fs = [...e.target.files]; if(fs.length) ingestFiles(fs);
       e.target.value = "";
     });
+    window.addEventListener("dragover", e=>{e.preventDefault()});
     window.addEventListener("drop", e=>{
       if(!e.dataTransfer?.files?.length) return;
       e.preventDefault();
