@@ -17,8 +17,8 @@
     "발주번호":"발주번호","발주ID":"발주번호","주문번호":"발주번호","발주 번호":"발주번호","PO번호":"발주번호",
     // 상품명
     "상품명":"상품명","옵션명":"상품명","상품 명":"상품명","상품이름":"상품명","상품 이름":"상품명",
-    // 모델명
-    "모델명":"모델명","모델 명":"모델명","모델":"모델명","SKU":"모델명","sku":"모델명","상품번호":"모델명","상품바코드":"모델명",
+    // 모델명 (상품번호/SKU/상품바코드는 쿠팡 SKU ID이므로 모델명 아님 — 매핑 제거)
+    "모델명":"모델명","모델 명":"모델명","모델":"모델명",
     // 발주수량
     "발주수량":"발주수량","주문수량":"발주수량","발주 수량":"발주수량",
     // 실제출고량
@@ -136,6 +136,20 @@
     return isNaN(n) ? 0 : n;
   }
 
+  // 상품이름에서 모델 코드 자동 추출 (예: "랜스타 LS-AIRG 무선 에어건 1개" → "LS-AIRG")
+  // 패턴: LS-XXX, LSP-XXX, 또는 괄호 안 (LS-XXX)
+  function extractModel(name){
+    if(!name) return "";
+    const s = String(name);
+    // 괄호 안의 LS-XXX 패턴 우선 (가장 명확한 표기)
+    let m = s.match(/[(\[]\s*(LSP?[A-Z0-9]*[-_.][A-Z0-9.\-_]+)\s*[)\]]/i);
+    if(m) return m[1].toUpperCase();
+    // 일반 LS-XXX / LSP-XXX 패턴
+    m = s.match(/\b(LSP?[A-Z0-9]*[-_.][A-Z0-9.\-_]+)\b/i);
+    if(m) return m[1].toUpperCase();
+    return "";
+  }
+
   async function readWorkbook(file){
     const buf = await file.arrayBuffer();
     return XLSX.read(buf, { cellDates:true });
@@ -187,7 +201,7 @@
         발주일자: d ? d.toISOString() : null,
         발주번호: po==null ? "" : String(po).replace(/\.0$/,""),
         상품명:   name==null ? "" : String(name),
-        모델명:   idx["모델명"]>=0 && row[idx["모델명"]]!=null ? String(row[idx["모델명"]]) : "",
+        모델명:   (idx["모델명"]>=0 && row[idx["모델명"]]!=null && String(row[idx["모델명"]]).trim()) ? String(row[idx["모델명"]]).trim() : extractModel(name),
         발주수량:  ord,
         실제출고량: ship,
         미출고수량: unship,
