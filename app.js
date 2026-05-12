@@ -487,7 +487,7 @@
             <tbody>
               ${aggProducts(rows,10).map(p=>`
                 <tr>
-                  <td><span class="truncate" title="${escapeHtml(p.name||p.key)}"><b>${escapeHtml(p.model||"")}</b> ${escapeHtml(p.name||"")}</span></td>
+                  <td><b title="${escapeHtml(p.name||p.key)}">${escapeHtml(p.model||"-")}</b></td>
                   <td class="num">${fmtN(p.count)}</td>
                   <td class="num">${fmtN(p.qty)}</td>
                   <td class="num">${fmtW(p.amt)}</td>
@@ -625,7 +625,7 @@
             <tbody>
               ${aggProducts(rows.filter(x=>(x.미출고사유||"미분류")===r.reason),10).map(p=>`
                 <tr>
-                  <td><span class="truncate" title="${escapeHtml(p.name||p.key)}"><b>${escapeHtml(p.model||"")}</b> ${escapeHtml(p.name||"")}</span></td>
+                  <td><b title="${escapeHtml(p.name||p.key)}">${escapeHtml(p.model||"-")}</b></td>
                   <td class="num">${fmtN(p.count)}</td>
                   <td class="num">${fmtN(p.qty)}</td>
                   <td class="num">${fmtW(p.amt)}</td>
