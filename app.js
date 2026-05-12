@@ -150,6 +150,14 @@
     return "";
   }
 
+  // 행의 최종 표시 모델명 (기존 데이터에 SKU가 저장돼 있어도 자동 변환)
+  function rowModel(r){
+    let model = (r.모델명||"").trim();
+    // 숫자만 6자리 이상이면 쿠팡 SKU ID → 모델 아님 → 상품명에서 추출 시도
+    if(!model || /^\d{6,}$/.test(model)) model = extractModel(r.상품명) || "";
+    return model;
+  }
+
   async function readWorkbook(file){
     const buf = await file.arrayBuffer();
     return XLSX.read(buf, { cellDates:true });
@@ -309,8 +317,9 @@
   function aggProducts(rows, n=20){
     const m = new Map();
     for(const r of rows){
-      const key = (r.모델명||"").trim() ? r.모델명 : (r.상품명||"").slice(0,80);
-      if(!m.has(key)) m.set(key,{key, name:r.상품명, model:r.모델명, count:0, qty:0, amt:0, reasons:{}});
+      const model = rowModel(r);
+      const key = model || (r.상품명||"").slice(0,80);
+      if(!m.has(key)) m.set(key,{key, name:r.상품명, model:model, count:0, qty:0, amt:0, reasons:{}});
       const o = m.get(key); o.count++; o.qty+=r.미출고수량||0; o.amt+=r["미출고 금액"]||0;
       const reason = (r.미출고사유||"미분류").trim()||"미분류";
       o.reasons[reason] = (o.reasons[reason]||0) + 1;
@@ -801,7 +810,7 @@
         <tr>
           <td>${r.발주일자 ? ymdKey(new Date(r.발주일자)) : "-"}</td>
           <td><code>${escapeHtml(r.발주번호)}</code></td>
-          <td><b>${escapeHtml(r.모델명)}</b></td>
+          <td><b>${escapeHtml(rowModel(r))}</b></td>
           <td><span class="truncate" title="${escapeHtml(r.상품명)}">${escapeHtml(r.상품명)}</span></td>
           <td class="num">${fmtN(r.발주수량)}</td>
           <td class="num">${fmtN(r.실제출고량)}</td>
