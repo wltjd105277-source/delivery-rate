@@ -167,7 +167,10 @@ async def save_data(request: Request, payload: dict = Body(...)):
 # ─────────────────────────────────────────────────────────────
 @app.get("/")
 def root():
-    return FileResponse(ROOT / "index.html")
+    return FileResponse(
+        ROOT / "index.html",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 app.mount("/", StaticFiles(directory=str(ROOT), html=False), name="static")
@@ -178,5 +181,4 @@ if __name__ == "__main__":
 
     port = int(os.environ.get("PORT", 8080))
     print(f"  → http://localhost:{port}")
-    print(f"  AUTH = {'ENABLED' if ACCESS_TOKEN else 'DISABLED (URL이 비밀번호 역할)'}")
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    print(f"  AUTH = {'ENABLED' if ACCESS_TOKEN else 'D
