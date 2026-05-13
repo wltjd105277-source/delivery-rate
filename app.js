@@ -17,8 +17,9 @@
     "발주번호":"발주번호","발주ID":"발주번호","주문번호":"발주번호","발주 번호":"발주번호","PO번호":"발주번호",
     // 상품명
     "상품명":"상품명","옵션명":"상품명","상품 명":"상품명","상품이름":"상품명","상품 이름":"상품명",
-    // 모델명 (상품번호/SKU/상품바코드는 쿠팡 SKU ID이므로 모델명 아님 — 매핑 제거)
+    // 모델명: 진짜 모델명 컬럼 우선. 없으면 상품번호(SKU)를 임시로 받아서 rowModel이 표시 시점에 변환
     "모델명":"모델명","모델 명":"모델명","모델":"모델명",
+    "상품번호":"모델명","상품바코드":"모델명","SKU":"모델명","sku":"모델명","SKU ID":"모델명",
     // 발주수량
     "발주수량":"발주수량","주문수량":"발주수량","발주 수량":"발주수량",
     // 실제출고량
@@ -204,14 +205,20 @@
   // SKU ID → 모델명 lookup (sku_lookup.json에서 로드, 847개 랜스타 제품)
   const SKU_LOOKUP = {};
 
-  // 행의 최종 표시 모델명 (기존 데이터에 SKU가 저장돼 있어도 자동 변환)
+  // 행의 최종 표시 모델명 — 단계별 변환:
+  //   1) 진짜 모델명 (LS-XXX) → 그대로
+  //   2) SKU 숫자 → SKU lookup → 매핑된 모델명
+  //   3) lookup 실패 → 상품명에서 LS-XXX 추출
+  //   4) 그것도 실패 → SKU 번호 그대로 (새 SKU 식별용)
   function rowModel(r){
     let model = (r.모델명||"").trim();
-    // 숫자만 6자리 이상이면 쿠팡 SKU ID → lookup 우선, 없으면 상품명 추출
-    if(!model || /^\d{6,}$/.test(model)){
-      const sku = model && /^\d{6,}$/.test(model) ? model : null;
-      if(sku && SKU_LOOKUP[sku]) return SKU_LOOKUP[sku];
-      model = extractModel(r.상품명) || (sku || "");
+    if(!model) return extractModel(r.상품명) || "";
+    if(/^\d{6,}$/.test(model)){
+      // SKU 형태 (6자리 이상 숫자)
+      if(SKU_LOOKUP[model]) return SKU_LOOKUP[model];   // 1순위: lookup
+      const extracted = extractModel(r.상품명);
+      if(extracted) return extracted;                    // 2순위: 상품명 추출
+      return "SKU#" + model;                             // 3순위: SKU 번호 표시 (식별 가능)
     }
     return model;
   }
@@ -1071,7 +1078,6 @@
   try{
     const s = localStorage.getItem(STORE_KEY);
     if(s){
-      const p = JSON.parse(s);
       State.rows = (p.rows||[]).map(r=>({...r, 발주일자: r.발주일자 ? new Date(r.발주일자) : null}));
       State.files = p.files||[];
     }
