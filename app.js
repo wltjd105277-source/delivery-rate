@@ -1067,12 +1067,6 @@
   /* ---------- 초기화 ---------- */
   bind();
   // SKU 매핑 + 서버 데이터 동시 로드, 둘 다 끝나면 한 번에 render
-  Promise.all([
-    fetch("sku_lookup.json", {cache:"no-cache"}).then(r => r.ok ? r.json() : null).catch(() => null),
-    load()
-  ]).then(([sku]) => {
-    if(sku) Object.assign(SKU_LOOKUP, sku);
-    render();
   // 초기화 진행 동안 빈 화면 방지 — localStorage 기준으로 먼저 한 번 그림
   try{
     const s = localStorage.getItem(STORE_KEY);
@@ -1083,4 +1077,8 @@
     }
   }catch(e){}
   render();
-})();
+  // SKU 매핑 + 서버 데이터 동시 로드, 둘 다 끝나면 한 번에 render
+  Promise.all([
+    fetch("sku_lookup.json", {cache:"no-cache"}).then(r => r.ok ? r.json() : null).catch(() => null),
+    load()
+ 
