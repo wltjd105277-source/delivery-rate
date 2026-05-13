@@ -82,4 +82,101 @@ def _load_data() -> dict:
         try:
             with _pg_pool.connection() as conn, conn.cursor() as cur:
                 cur.execute("SELECT value FROM app_kv WHERE key=%s", ("main",))
-                row = 
+                row = cur.fetchone()
+            if row:
+                return row[0] if isinstance(row[0], dict) else json.loads(row[0])
+            return {"rows": [], "files": []}
+        except Exception as e:
+            print(f"[LOAD] PG 오류 → 디스크 fallback: {e}")
+    if not DATA_PATH.exists():
+        return {"rows": [], "files": []}
+    return json.loads(DATA_PATH.read_text(encoding="utf-8"))
+
+
+def _save_data(payload: dict) -> int:
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    if _pg_pool:
+        try:
+            with _pg_pool.connection() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO app_kv (key, value, updated_at)
+                    VALUES (%s, %s::jsonb, NOW())
+                    ON CONFLICT (key) DO UPDATE
+                    SET value = EXCLUDED.value, updated_at = NOW()
+                    """,
+                    ("main", body),
+                )
+                conn.commit()
+            return len(body)
+        except Exception as e:
+            print(f"[SAVE] PG 오류 → 디스크 fallback: {e}")
+    # 디스크 저장
+    if DATA_PATH.exists():
+        try:
+            (DATA_DIR / "data.json.bak").write_bytes(DATA_PATH.read_bytes())
+        except Exception:
+            pass
+    DATA_PATH.write_text(body, encoding="utf-8")
+    return DATA_PATH.stat().st_size
+
+
+# ─────────────────────────────────────────────────────────────
+# 인증
+# ─────────────────────────────────────────────────────────────
+def check_auth(request: Request):
+    if not ACCESS_TOKEN:
+        return  # 인증 비활성 (URL이 비밀번호 역할)
+    token = (
+        request.headers.get("x-token")
+        or request.headers.get("X-Token")
+        or request.query_params.get("token")
+        or ""
+    )
+    if token != ACCESS_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+# ─────────────────────────────────────────────────────────────
+# API
+# ─────────────────────────────────────────────────────────────
+@app.get("/api/health")
+def health():
+    return {
+        "ok": True,
+        "storage": "postgres" if _pg_pool else "disk",
+        "data_dir": str(DATA_DIR) if not _pg_pool else None,
+        "auth_enabled": bool(ACCESS_TOKEN),
+    }
+
+
+@app.get("/api/data")
+def get_data(_=Depends(check_auth)):
+    return _load_data()
+
+
+@app.put("/api/data")
+async def save_data(request: Request, payload: dict = Body(...)):
+    check_auth(request)
+    size = _save_data(payload)
+    return {"ok": True, "size": size}
+
+
+# ─────────────────────────────────────────────────────────────
+# 정적 파일 서빙
+# ─────────────────────────────────────────────────────────────
+@app.get("/")
+def root():
+    return FileResponse(ROOT / "index.html")
+
+
+app.mount("/", StaticFiles(directory=str(ROOT), html=False), name="static")
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    port = int(os.environ.get("PORT", 8080))
+    print(f"  → http://localhost:{port}")
+    print(f"  AUTH = {'ENABLED' if ACCESS_TOKEN else 'DISABLED (URL이 비밀번호 역할)'}")
+    uvicorn.run(app, host="0.0.0.0", port=port)
