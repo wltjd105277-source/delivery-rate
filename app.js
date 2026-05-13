@@ -609,18 +609,19 @@
     State.charts.chReasonsDonut = new Chart($("#chReasonsDonut"),{
       type:"doughnut",
       data:{
-        labels: reasonsAgg.map(r=>r.reason),
+        labels: reasonsAgg.map(r=>shortenReason(r.reason)),
         datasets:[{
           data: reasonsAgg.map(r=>r.amt),
           backgroundColor: reasonsAgg.map((r,i)=>REASON_PALETTE[i%REASON_PALETTE.length]),
-          borderColor:"#161b22", borderWidth:2
+          borderColor:"#161b22", borderWidth:2,
+          _fullLabels: reasonsAgg.map(r=>r.reason)
         }]
       },
       options:{
         maintainAspectRatio:false, responsive:true, cutout:"60%",
         plugins:{
           legend:{position:"right", labels:{boxWidth:12}},
-          tooltip:{callbacks:{label:c=>`${c.label}: ${fmtW(c.parsed)}`}}
+          tooltip:{callbacks:{label:c=>`${c.dataset._fullLabels?.[c.dataIndex]||c.label}: ${fmtW(c.parsed)}`}}
         }
       }
     });
@@ -724,12 +725,14 @@
     State.charts.chReasonBar = new Chart($("#chReasonBar"),{
       type:"bar",
       data:{
-        labels: cur.map(r=>r.reason),
+        labels: cur.map(r=>shortenReason(r.reason)),
         datasets:[{label:"미출고 금액", data:cur.map(r=>r.amt),
-          backgroundColor: cur.map((r,i)=>REASON_PALETTE[i%REASON_PALETTE.length])}]
+          backgroundColor: cur.map((r,i)=>REASON_PALETTE[i%REASON_PALETTE.length]),
+          _fullLabels: cur.map(r=>r.reason)}]
       },
       options:{
-        maintainAspectRatio:false, indexAxis:"y", plugins:{legend:{display:false}},
+        maintainAspectRatio:false, indexAxis:"y", plugins:{legend:{display:false},
+          tooltip:{callbacks:{title:c=>c[0].dataset._fullLabels?.[c[0].dataIndex]||c[0].label, label:c=>fmtW(c.parsed.x)}}},
         scales:{x:{ticks:{callback:v=>"₩"+(v/10000).toFixed(0)+"만"}}}
       }
     });
@@ -741,16 +744,17 @@
       data:{
         labels: rbm.months,
         datasets: rbm.reasons.map((r,i)=>({
-          label:r,
+          label: shortenReason(r),
           data: rbm.months.map(mo=>{
             const totalMonth = rbm.reasons.reduce((a,rr)=>a+rbm.matrix[rr][mo].amt,0);
             return totalMonth ? rbm.matrix[r][mo].amt/totalMonth*100 : 0;
           }),
-          backgroundColor: REASON_PALETTE[i%REASON_PALETTE.length]
+          backgroundColor: REASON_PALETTE[i%REASON_PALETTE.length],
+          _fullLabel: r
         }))
       },
       options:{
-        maintainAspectRatio:false, plugins:{legend:{position:"bottom"}, tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y.toFixed(1)}%`}}},
+        maintainAspectRatio:false, plugins:{legend:{position:"bottom"}, tooltip:{callbacks:{label:c=>`${c.dataset._fullLabel||c.dataset.label}: ${c.parsed.y.toFixed(1)}%`}}},
         scales:{ x:{stacked:true}, y:{stacked:true, max:100, ticks:{callback:v=>v+"%"}} }
       }
     });
@@ -1069,7 +1073,6 @@
   ]).then(([sku]) => {
     if(sku) Object.assign(SKU_LOOKUP, sku);
     render();
-  });
   // 초기화 진행 동안 빈 화면 방지 — localStorage 기준으로 먼저 한 번 그림
   try{
     const s = localStorage.getItem(STORE_KEY);
