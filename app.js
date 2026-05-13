@@ -1081,4 +1081,8 @@
   Promise.all([
     fetch("sku_lookup.json", {cache:"no-cache"}).then(r => r.ok ? r.json() : null).catch(() => null),
     load()
- 
+  ]).then(([sku]) => {
+    if(sku) Object.assign(SKU_LOOKUP, sku);
+    render();
+  });
+})();
