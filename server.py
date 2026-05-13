@@ -180,5 +180,5 @@ if __name__ == "__main__":
     import uvicorn
 
     port = int(os.environ.get("PORT", 8080))
-    print(f"  → http://localhost:{port}")
-    print(f"  AUTH = {'ENABLED' if ACCESS_TOKEN else 'D
+    print(f"  AUTH = {'ENABLED' if ACCESS_TOKEN else 'DISABLED (URL이 비밀번호 역할)'}")
+    uvicorn.run(app, host="0.0.0.0", port=port)
