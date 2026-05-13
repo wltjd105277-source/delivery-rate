@@ -991,16 +991,19 @@
             <button class="btn danger" id="btnReset">전체 초기화</button>
           </div>
           <table class="t">
-            <thead><tr><th>파일명</th><th class="num">행수</th><th class="num">크기</th><th>업로드 시각</th></tr></thead>
+            <thead><tr><th>파일명</th><th class="num">행수</th><th class="num">크기</th><th>업로드 시각</th><th></th></tr></thead>
             <tbody>
-              ${State.files.length ? State.files.map((f,i)=>`
+              ${State.files.length ? State.files.map((f,i)=>{
+                const actualRows = State.rows.filter(r => r._src && r._src.startsWith(f.name + " /")).length;
+                return `
                 <tr>
                   <td>${escapeHtml(f.name)}</td>
-                  <td class="num">${fmtN(f.rowCount)}</td>
+                  <td class="num">${fmtN(actualRows)}${actualRows!==f.rowCount?`<span class="muted sm"> (원본 ${fmtN(f.rowCount)})</span>`:""}</td>
                   <td class="num">${(f.size/1024).toFixed(1)} KB</td>
                   <td>${new Date(f.addedAt).toLocaleString("ko-KR")}</td>
+                  <td class="num"><button class="btn danger sm" data-del-file="${escapeHtml(f.name)}" style="padding:4px 10px;font-size:11px">삭제</button></td>
                 </tr>
-              `).join("") : `<tr><td colspan="4" class="muted">업로드 이력 없음</td></tr>`}
+              `}).join("") : `<tr><td colspan="5" class="muted">업로드 이력 없음</td></tr>`}
             </tbody>
           </table>
         </div>
@@ -1048,6 +1051,19 @@
       }
     });
     $("#btnExportAll")?.addEventListener("click", ()=>exportXLSX(State.rows));
+    // 파일별 삭제 버튼
+    $$("button[data-del-file]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const fname = btn.dataset.delFile;
+        const matched = State.rows.filter(r => r._src && r._src.startsWith(fname + " /")).length;
+        if(confirm(`「${fname}」 파일에서 가져온 ${matched}건을 삭제할까요?`)){
+          State.rows = State.rows.filter(r => !(r._src && r._src.startsWith(fname + " /")));
+          State.files = State.files.filter(f => f.name !== fname);
+          save(); render();
+          toast(`${matched}건 삭제됨`,"ok");
+        }
+      });
+    });
   }
 
   /* ---------- 이벤트 바인딩 ---------- */
@@ -1062,6 +1078,7 @@
     $("#fileInput").addEventListener("change", e=>{
       const fs = [...e.target.files]; if(fs.length) ingestFiles(fs);
       e.target.value = "";
+      e.target.value = "";
     });
     window.addEventListener("dragover", e=>{e.preventDefault()});
     window.addEventListener("drop", e=>{
@@ -1073,17 +1090,15 @@
 
   /* ---------- 초기화 ---------- */
   bind();
-  // SKU 매핑 + 서버 데이터 동시 로드, 둘 다 끝나면 한 번에 render
-  // 초기화 진행 동안 빈 화면 방지 — localStorage 기준으로 먼저 한 번 그림
   try{
     const s = localStorage.getItem(STORE_KEY);
     if(s){
+      const p = JSON.parse(s);
       State.rows = (p.rows||[]).map(r=>({...r, 발주일자: r.발주일자 ? new Date(r.발주일자) : null}));
       State.files = p.files||[];
     }
   }catch(e){}
   render();
-  // SKU 매핑 + 서버 데이터 동시 로드, 둘 다 끝나면 한 번에 render
   Promise.all([
     fetch("sku_lookup.json", {cache:"no-cache"}).then(r => r.ok ? r.json() : null).catch(() => null),
     load()
